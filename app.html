@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Research Agent</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#f5f5f7;--card:#fff;--border:#e5e7eb;--text:#1d1d1f;--muted:#6e6e73;
+  --blue:#1d4ed8;--blue-light:#eff6ff;--green:#065f46;--green-light:#d1fae5;
+  --orange:#92400e;--orange-light:#fef3c7;--red:#991b1b;--red-light:#fee2e2;
+  --radius:14px;--shadow:0 1px 4px rgba(0,0,0,.08);
+}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Pretendard,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+
+/* Header */
+header{background:#1d1d1f;color:#fff;padding:18px 32px;display:flex;align-items:center;gap:16px}
+header h1{font-size:18px;font-weight:700;letter-spacing:-.3px}
+header p{font-size:12px;color:#aeaeb2;margin-top:2px}
+.header-badge{margin-left:auto;font-size:11px;background:#2d2d2f;color:#aeaeb2;padding:4px 10px;border-radius:20px}
+
+/* Layout */
+main{max-width:900px;margin:0 auto;padding:28px 20px;display:flex;flex-direction:column;gap:16px}
+
+/* Card */
+.card{background:var(--card);border-radius:var(--radius);padding:24px;box-shadow:var(--shadow)}
+.card h2{font-size:15px;font-weight:700;margin-bottom:18px;color:var(--text)}
+
+/* Form */
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.form-group{display:flex;flex-direction:column;gap:6px}
+.form-group.full{grid-column:1/-1}
+label{font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+input[type=text],input[type=number]{
+  padding:10px 14px;border:1.5px solid var(--border);border-radius:10px;
+  font-size:14px;color:var(--text);outline:none;transition:border-color .15s;width:100%
+}
+input[type=text]:focus,input[type=number]:focus{border-color:var(--blue)}
+.year-row{display:flex;align-items:center;gap:8px}
+.year-row span{color:var(--muted);font-size:14px}
+.year-row input{flex:1}
+.slider-row{display:flex;align-items:center;gap:12px}
+input[type=range]{flex:1;accent-color:var(--blue);cursor:pointer}
+.slider-val{font-size:16px;font-weight:700;color:var(--blue);min-width:32px;text-align:right}
+.btn-primary{
+  margin-top:6px;padding:12px 28px;background:var(--blue);color:#fff;border:none;
+  border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;transition:opacity .15s;
+  display:flex;align-items:center;gap:8px
+}
+.btn-primary:hover{opacity:.88}
+.btn-primary:disabled{opacity:.45;cursor:not-allowed}
+.btn-stop{
+  padding:8px 18px;background:#fff;color:#dc2626;border:1.5px solid #fca5a5;
+  border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;margin-left:auto
+}
+.btn-download{
+  padding:9px 20px;background:var(--green-light);color:var(--green);border:none;
+  border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;text-decoration:none;display:inline-block
+}
+.form-hint{font-size:12px;color:var(--muted);margin-top:2px}
+
+/* Error banner */
+.error-banner{background:var(--red-light);color:var(--red);padding:12px 16px;border-radius:10px;font-size:13px;display:none}
+
+/* Pipeline */
+.pipeline{display:flex;gap:0;border:1.5px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:18px}
+.stage{flex:1;padding:14px 10px;text-align:center;border-right:1.5px solid var(--border);background:#fafafa;transition:background .2s}
+.stage:last-child{border-right:none}
+.stage-icon{font-size:20px;margin-bottom:4px}
+.stage-name{font-size:12px;font-weight:600;margin-bottom:6px}
+.stage.active{background:var(--blue-light)}
+.stage.done-s{background:var(--green-light)}
+.stage.fail-s{background:var(--red-light)}
+
+/* Badge */
+.badge{display:inline-block;padding:2px 10px;border-radius:20px;font-size:11px;font-weight:600}
+.badge.pending{background:#f2f2f7;color:var(--muted)}
+.badge.running{background:var(--orange-light);color:var(--orange);animation:pulse 1.2s infinite}
+.badge.done{background:var(--green-light);color:var(--green)}
+.badge.failed{background:var(--red-light);color:var(--red)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+
+/* Stats */
+.stats-row{display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap}
+.stat{background:#fafafa;border:1.5px solid var(--border);border-radius:10px;padding:10px 16px;text-align:center;min-width:90px}
+.stat .val{font-size:22px;font-weight:700;color:var(--blue)}
+.stat .lbl{font-size:11px;color:var(--muted);margin-top:2px}
+
+/* Log */
+.log-wrap{position:relative}
+.log-box{
+  background:#0f172a;color:#94a3b8;font-family:'SF Mono',Monaco,monospace;font-size:12px;
+  line-height:1.6;padding:14px 16px;border-radius:10px;height:200px;overflow-y:auto;
+  white-space:pre-wrap;word-break:break-all
+}
+.log-box .log-ok{color:#4ade80}
+.log-box .log-err{color:#f87171}
+.log-box .log-warn{color:#fbbf24}
+
+/* Results */
+.results-header{display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap}
+.results-header h2{font-size:15px;font-weight:700}
+.cat-tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px}
+.cat-tab{
+  padding:5px 14px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;
+  background:#f2f2f7;color:var(--muted);border:none;transition:all .15s
+}
+.cat-tab.active{background:var(--blue-light);color:var(--blue)}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;padding:8px 10px;border-bottom:2px solid var(--border);font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);white-space:nowrap}
+td{padding:10px;border-bottom:1px solid #f9f9f9;vertical-align:top}
+tr:last-child td{border-bottom:none}
+td a{color:var(--blue);text-decoration:none;font-weight:500}
+td a:hover{text-decoration:underline}
+.summary-cell{font-size:12px;color:#374151;line-height:1.7;min-width:260px}
+.summary-cell b{color:#1d1d1f}
+.apa-cell{font-size:11px;color:#9ca3af;min-width:160px}
+.cat-pill{display:inline-block;background:var(--blue-light);color:var(--blue);padding:2px 8px;border-radius:10px;font-size:10px;margin:1px}
+.empty{color:var(--muted);text-align:center;padding:40px;font-size:13px}
+
+/* Index filter */
+.index-filter-group{display:flex;flex-wrap:wrap;gap:10px;margin-top:6px}
+.index-option{display:flex;align-items:center;gap:8px;cursor:pointer;padding:8px 14px;border:1.5px solid var(--border);border-radius:10px;transition:all .15s;background:#fafafa}
+.index-option:hover{border-color:#93c5fd;background:var(--blue-light)}
+.index-option input[type=radio]{display:none}
+.index-option:has(input:checked){border-color:var(--blue);background:var(--blue-light)}
+.index-badge{display:inline-block;padding:3px 9px;border-radius:6px;font-size:11px;font-weight:700;letter-spacing:.03em}
+.index-badge.all{background:#f2f2f7;color:#555}
+.index-badge.scopus{background:#dbeafe;color:#1e40af}
+.index-badge.esci{background:#dcfce7;color:#166534}
+.index-badge.ssci{background:#fef3c7;color:#92400e}
+.index-desc{font-size:12px;color:var(--muted)}
+.index-option:has(input:checked) .index-desc{color:var(--blue)}
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>Research Agent</h1>
+    <p>학술논문 자동 검색 · 요약 · 범주화 시스템</p>
+  </div>
+  <div class="header-badge" id="api-badge">API 연결 확인 중...</div>
+</header>
+
+<main>
+
+  <!-- 검색 설정 -->
+  <div class="card" id="search-card">
+    <h2>검색 설정</h2>
+    <div class="error-banner" id="err-banner"></div>
+
+    <div class="form-grid">
+      <div class="form-group full">
+        <label>검색 키워드</label>
+        <input type="text" id="keyword" placeholder="예: AI in education systematic review">
+      </div>
+
+      <div class="form-group">
+        <label>검색 기간</label>
+        <div class="year-row">
+          <input type="number" id="year_from" value="2020" min="2000" max="2025">
+          <span>~</span>
+          <input type="number" id="year_to" value="2024" min="2000" max="2025">
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>최대 논문 수 &nbsp;<span class="slider-val" id="papers-val">20</span>편</label>
+        <div class="slider-row">
+          <span style="font-size:12px;color:var(--muted)">5</span>
+          <input type="range" id="max_papers" min="5" max="100" value="20" step="5">
+          <span style="font-size:12px;color:var(--muted)">100</span>
+        </div>
+      </div>
+
+      <div class="form-group full">
+        <label>저널 인덱스 필터</label>
+        <div class="index-filter-group">
+          <label class="index-option">
+            <input type="radio" name="index_filter" value="all" checked>
+            <span class="index-badge all">ALL</span>
+            <span class="index-desc">전체 (인덱스 무관)</span>
+          </label>
+          <label class="index-option">
+            <input type="radio" name="index_filter" value="scopus">
+            <span class="index-badge scopus">Scopus</span>
+            <span class="index-desc">Scopus 등재지</span>
+          </label>
+          <label class="index-option">
+            <input type="radio" name="index_filter" value="esci">
+            <span class="index-badge esci">ESCI</span>
+            <span class="index-desc">WoS Emerging Sources (근사: Scopus + h≥5)</span>
+          </label>
+          <label class="index-option">
+            <input type="radio" name="index_filter" value="ssci_sci">
+            <span class="index-badge ssci">SSCI/SCI</span>
+            <span class="index-desc">WoS Core Collection (근사: Scopus + h≥40)</span>
+          </label>
+        </div>
+        <span class="form-hint">ESCI·SSCI/SCI는 Scopus 데이터 + h-index를 활용한 근사값입니다</span>
+      </div>
+
+      <div class="form-group full">
+        <label>카테고리 <span style="font-weight:400;text-transform:none">(쉼표로 구분 · 비워두면 자동 분류)</span></label>
+        <input type="text" id="categories" placeholder="예: 효과성연구,기술개발,윤리및정책">
+        <span class="form-hint">한국어 카테고리도 지원합니다</span>
+      </div>
+    </div>
+
+    <div style="display:flex;align-items:center;gap:12px;margin-top:18px">
+      <button class="btn-primary" id="run-btn" onclick="startRun()">
+        <span>🔍</span> 검색 시작
+      </button>
+      <button class="btn-stop" id="stop-btn" onclick="stopRun()" style="display:none">■ 중단</button>
+    </div>
+  </div>
+
+  <!-- 진행 상황 -->
+  <div class="card" id="progress-card" style="display:none">
+    <h2>진행 상황</h2>
+
+    <div class="pipeline">
+      <div class="stage" id="s-search">
+        <div class="stage-icon">🔍</div>
+        <div class="stage-name">검색</div>
+        <span class="badge pending" id="b-search">대기</span>
+      </div>
+      <div class="stage" id="s-summary">
+        <div class="stage-icon">📝</div>
+        <div class="stage-name">요약</div>
+        <span class="badge pending" id="b-summary">대기</span>
+      </div>
+      <div class="stage" id="s-category">
+        <div class="stage-icon">🗂</div>
+        <div class="stage-name">범주화</div>
+        <span class="badge pending" id="b-category">대기</span>
+      </div>
+      <div class="stage" id="s-validation">
+        <div class="stage-icon">✅</div>
+        <div class="stage-name">검증</div>
+        <span class="badge pending" id="b-validation">대기</span>
+      </div>
+    </div>
+
+    <div class="stats-row">
+      <div class="stat"><div class="val" id="st-found">—</div><div class="lbl">논문 발견</div></div>
+      <div class="stat"><div class="val" id="st-processed">—</div><div class="lbl">처리 완료</div></div>
+      <div class="stat"><div class="val" id="st-attempt">—</div><div class="lbl">재시도 횟수</div></div>
+    </div>
+
+    <div class="log-wrap">
+      <div class="log-box" id="log-box"></div>
+    </div>
+  </div>
+
+  <!-- 결과 -->
+  <div class="card" id="results-card" style="display:none">
+    <div class="results-header">
+      <h2 id="results-title">검색 결과</h2>
+      <a class="btn-download" href="/api/report" target="_blank">⬇ 보고서 다운로드</a>
+    </div>
+    <div class="cat-tabs" id="cat-tabs"></div>
+    <div id="results-table"></div>
+  </div>
+
+</main>
+
+<script>
+const STAGES = ['search','summary','category','validation'];
+const STAGE_LABELS = {search:'검색',summary:'요약',category:'범주화',validation:'검증'};
+let _polling = false;
+let _logLen = 0;
+let _allPapers = [];
+let _activeCat = 'all';
+
+// ── 슬라이더 ────────────────────────────────────────────────────
+document.getElementById('max_papers').addEventListener('input', e => {
+  document.getElementById('papers-val').textContent = e.target.value;
+});
+
+// ── API 상태 확인 ────────────────────────────────────────────────
+async function checkApi() {
+  try {
+    const r = await fetch('/api/status');
+    if (r.ok) {
+      document.getElementById('api-badge').textContent = '서버 연결됨 ✓';
+      document.getElementById('api-badge').style.background = '#14532d';
+      document.getElementById('api-badge').style.color = '#bbf7d0';
+    }
+  } catch {
+    document.getElementById('api-badge').textContent = '서버 미연결';
+    document.getElementById('api-badge').style.color = '#f87171';
+  }
+}
+checkApi();
+
+// ── 실행 ────────────────────────────────────────────────────────
+async function startRun() {
+  const keyword = document.getElementById('keyword').value.trim();
+  if (!keyword) { showError('키워드를 입력해주세요.'); return; }
+
+  hideError();
+  _logLen = 0;
+  _allPapers = [];
+  _activeCat = 'all';
+
+  const indexFilter = document.querySelector('input[name="index_filter"]:checked')?.value || 'all';
+
+  const params = {
+    keyword,
+    year_from: parseInt(document.getElementById('year_from').value),
+    year_to:   parseInt(document.getElementById('year_to').value),
+    max_papers: parseInt(document.getElementById('max_papers').value),
+    categories: document.getElementById('categories').value.trim(),
+    index_filter: indexFilter,
+  };
+
+  const r = await fetch('/api/run', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify(params),
+  });
+  const data = await r.json();
+
+  if (!r.ok) { showError(data.error || '실행 오류'); return; }
+
+  document.getElementById('run-btn').disabled = true;
+  document.getElementById('stop-btn').style.display = 'inline-block';
+  document.getElementById('progress-card').style.display = 'block';
+  document.getElementById('results-card').style.display = 'none';
+  document.getElementById('log-box').textContent = '';
+  resetStages();
+
+  _polling = true;
+  pollLoop();
+}
+
+async function stopRun() {
+  await fetch('/api/stop', {method:'POST'});
+  _polling = false;
+  document.getElementById('stop-btn').style.display = 'none';
+  document.getElementById('run-btn').disabled = false;
+}
+
+// ── 폴링 ────────────────────────────────────────────────────────
+async function pollLoop() {
+  while (_polling) {
+    await Promise.all([pollStatus(), pollLogs()]);
+    await sleep(1200);
+  }
+}
+
+async function pollStatus() {
+  try {
+    const r = await fetch('/api/status?_=' + Date.now());
+    if (!r.ok) return;
+    const s = await r.json();
+    updateStages(s);
+    updateStats(s);
+
+    if (s.server_done) {
+      _polling = false;
+      document.getElementById('run-btn').disabled = false;
+      document.getElementById('stop-btn').style.display = 'none';
+      await pollLogs();
+      await loadResults();
+    }
+    if (s.server_error) {
+      _polling = false;
+      document.getElementById('run-btn').disabled = false;
+      document.getElementById('stop-btn').style.display = 'none';
+      showError(s.server_error);
+    }
+  } catch {}
+}
+
+async function pollLogs() {
+  try {
+    const r = await fetch('/api/logs?_=' + Date.now());
+    if (!r.ok) return;
+    const {logs} = await r.json();
+    if (logs.length > _logLen) {
+      const box = document.getElementById('log-box');
+      const newLines = logs.slice(_logLen);
+      newLines.forEach(line => {
+        const span = document.createElement('div');
+        span.textContent = line;
+        if (line.includes('PASS') || line.includes('완료') || line.includes('Done')) span.className = 'log-ok';
+        else if (line.includes('ERROR') || line.includes('FAIL') || line.includes('실패')) span.className = 'log-err';
+        else if (line.includes('WARNING') || line.includes('경고')) span.className = 'log-warn';
+        box.appendChild(span);
+      });
+      box.scrollTop = box.scrollHeight;
+      _logLen = logs.length;
+    }
+  } catch {}
+}
+
+// ── 단계 업데이트 ────────────────────────────────────────────────
+function resetStages() {
+  STAGES.forEach(name => {
+    document.getElementById('s-'+name).className = 'stage';
+    const b = document.getElementById('b-'+name);
+    b.className = 'badge pending';
+    b.textContent = '대기';
+  });
+  ['st-found','st-processed','st-attempt'].forEach(id => document.getElementById(id).textContent = '—');
+}
+
+function updateStages(s) {
+  const currentIdx = STAGES.indexOf(s.stage);
+  STAGES.forEach((name, idx) => {
+    const stageEl = document.getElementById('s-'+name);
+    const badge = document.getElementById('b-'+name);
+    stageEl.className = 'stage';
+
+    if (s.stage === 'complete' || idx < currentIdx) {
+      stageEl.classList.add('done-s');
+      badge.className = 'badge done';
+      badge.textContent = '완료';
+    } else if (s.stage === name) {
+      if (s.stage_status === 'failed') {
+        stageEl.classList.add('fail-s');
+        badge.className = 'badge failed';
+        badge.textContent = '실패';
+      } else {
+        stageEl.classList.add('active');
+        badge.className = 'badge running';
+        badge.textContent = '실행 중';
+      }
+    }
+  });
+}
+
+function updateStats(s) {
+  if (s.paper_count) document.getElementById('st-found').textContent = s.paper_count;
+  if (s.papers_processed) document.getElementById('st-processed').textContent = s.papers_processed;
+  const attempts = s.attempt ? Object.values(s.attempt).reduce((a,b)=>a+b,0)-4 : 0;
+  document.getElementById('st-attempt').textContent = Math.max(0, attempts);
+}
+
+// ── 결과 렌더링 ─────────────────────────────────────────────────
+async function loadResults() {
+  const r = await fetch('/api/results');
+  if (!r.ok) return;
+  _allPapers = await r.json();
+  renderResults(_allPapers);
+  document.getElementById('results-card').style.display = 'block';
+  document.getElementById('results-card').scrollIntoView({behavior:'smooth'});
+}
+
+function renderResults(papers) {
+  const bycat = {};
+  papers.forEach(p => {
+    (p.categories||['미분류']).forEach(c => {
+      bycat[c] = bycat[c] || [];
+      bycat[c].push(p);
+    });
+  });
+  const cats = Object.keys(bycat).sort();
+
+  document.getElementById('results-title').textContent = `검색 결과 — 총 ${papers.length}편`;
+
+  // Tabs
+  const tabsEl = document.getElementById('cat-tabs');
+  tabsEl.innerHTML = '';
+  const allBtn = makeTab('전체', 'all', papers.length);
+  tabsEl.appendChild(allBtn);
+  cats.forEach(c => tabsEl.appendChild(makeTab(c, c, bycat[c].length)));
+
+  setActiveTab('all');
+  renderTable(papers, bycat);
+}
+
+function makeTab(label, key, count) {
+  const btn = document.createElement('button');
+  btn.className = 'cat-tab' + (key === _activeCat ? ' active' : '');
+  btn.textContent = `${label} (${count})`;
+  btn.dataset.key = key;
+  btn.onclick = () => {
+    _activeCat = key;
+    document.querySelectorAll('.cat-tab').forEach(b => b.classList.toggle('active', b.dataset.key===key));
+    const bycat = {};
+    _allPapers.forEach(p => (p.categories||['미분류']).forEach(c => { bycat[c]=bycat[c]||[]; bycat[c].push(p); }));
+    const subset = key === 'all' ? _allPapers : (bycat[key]||[]);
+    renderTable(subset, bycat);
+  };
+  return btn;
+}
+
+function setActiveTab(key) {
+  _activeCat = key;
+  document.querySelectorAll('.cat-tab').forEach(b => b.classList.toggle('active', b.dataset.key===key));
+}
+
+function renderTable(papers, bycat) {
+  if (!papers.length) {
+    document.getElementById('results-table').innerHTML = '<div class="empty">결과가 없습니다</div>';
+    return;
+  }
+
+  const rows = papers.map((p, i) => {
+    const url = p.url || (p.doi ? 'https://doi.org/'+p.doi : '#');
+    const pills = (p.categories||[]).map(c => `<span class="cat-pill">${esc(c)}</span>`).join('');
+    const sumHtml = esc(p.summary||'')
+      .replace(/\n/g,'<br>')
+      .replace(/Purpose:/g,'<b>Purpose:</b>')
+      .replace(/Method:/g,'<b>Method:</b>')
+      .replace(/Results:/g,'<b>Results:</b>');
+    return `<tr>
+      <td style="min-width:200px"><a href="${esc(url)}" target="_blank">${esc(p.title)}</a><br><small style="color:var(--muted)">${pills}</small></td>
+      <td style="white-space:nowrap;font-weight:600">${p.year||'—'}</td>
+      <td style="font-size:12px;color:#555;min-width:120px">${esc(p.venue||'—')}</td>
+      <td class="summary-cell">${sumHtml}</td>
+      <td class="apa-cell">${esc(p.apa_ref||'')}</td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('results-table').innerHTML = `
+    <table>
+      <thead><tr><th>제목</th><th>연도</th><th>저널</th><th>요약</th><th>APA</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+
+// ── 유틸 ────────────────────────────────────────────────────────
+function esc(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+function showError(msg) {
+  const el = document.getElementById('err-banner');
+  el.textContent = '⚠ ' + msg;
+  el.style.display = 'block';
+}
+function hideError() {
+  document.getElementById('err-banner').style.display = 'none';
+}
+</script>
+</body>
+</html>
