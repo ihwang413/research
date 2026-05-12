@@ -1,0 +1,23 @@
+api:
+  anthropic_key: "${ANTHROPIC_API_KEY}"
+  openalex_email: "${OPENALEX_EMAIL}"
+  semantic_scholar_key: "${SS_API_KEY}"
+
+search:
+  max_papers: 50
+  year_from: 2020
+  year_to: 2024
+  language: "en"
+  per_page: 25
+  abstract_missing_warn_threshold: 0.30
+  venue_filter: []
+
+summary:
+  model: "claude-sonnet-4-6"
+  max_tokens: 512
+  batch_size: 10
+
+categories: []
+
+output_dir: "data"
+intermediate_save: true

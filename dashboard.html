@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Research Agent Dashboard</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f7; color: #1d1d1f; }
+header { background: #1d1d1f; color: #fff; padding: 16px 24px; display: flex; align-items: center; gap: 12px; }
+header h1 { font-size: 18px; font-weight: 600; }
+.status-dot { width: 10px; height: 10px; border-radius: 50%; background: #6e6e73; }
+.status-dot.running { background: #f5a623; animation: pulse 1.2s infinite; }
+.status-dot.done { background: #34c759; }
+.status-dot.failed { background: #ff3b30; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+main { max-width: 1100px; margin: 0 auto; padding: 24px 16px; }
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 24px; }
+.card { background: #fff; border-radius: 12px; padding: 16px 20px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+.card .label { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: #6e6e73; margin-bottom: 6px; }
+.card .value { font-size: 24px; font-weight: 700; }
+.badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; }
+.badge.pending { background: #f2f2f7; color: #6e6e73; }
+.badge.running { background: #fff3cd; color: #856404; }
+.badge.done { background: #d1fae5; color: #065f46; }
+.badge.failed { background: #fee2e2; color: #991b1b; }
+.pipeline { display: flex; gap: 0; margin-bottom: 24px; background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+.stage { flex: 1; padding: 14px 12px; text-align: center; border-right: 1px solid #f2f2f7; font-size: 13px; }
+.stage:last-child { border-right: none; }
+.stage .stage-name { font-weight: 600; margin-bottom: 4px; }
+.stage.active { background: #eff6ff; }
+.stage.done-stage { background: #f0fdf4; }
+.stage.failed-stage { background: #fff5f5; }
+section { background: #fff; border-radius: 12px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,.08); margin-bottom: 20px; }
+section h2 { font-size: 15px; font-weight: 600; margin-bottom: 14px; }
+.error-log { font-family: monospace; font-size: 12px; color: #dc2626; background: #fff5f5; padding: 10px 14px; border-radius: 8px; white-space: pre-wrap; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th { text-align: left; padding: 8px 10px; border-bottom: 2px solid #f2f2f7; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: #6e6e73; }
+td { padding: 10px 10px; border-bottom: 1px solid #f9f9f9; vertical-align: top; }
+tr:last-child td { border-bottom: none; }
+.cat-badge { display: inline-block; background: #eff6ff; color: #1d4ed8; padding: 2px 8px; border-radius: 10px; font-size: 11px; margin: 1px; }
+.summary-text { color: #6e6e73; font-size: 12px; line-height: 1.5; }
+.apa { font-size: 11px; color: #9ca3af; margin-top: 4px; }
+#no-data { text-align: center; color: #6e6e73; padding: 40px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="status-dot" id="hdr-dot"></div>
+  <h1>Research Agent Dashboard</h1>
+  <span style="margin-left:auto;font-size:13px;color:#aeaeb2" id="hdr-keyword"></span>
+</header>
+
+<main>
+  <div class="cards">
+    <div class="card"><div class="label">Stage</div><div class="value" id="c-stage">—</div></div>
+    <div class="card"><div class="label">Status</div><div class="value" id="c-status">—</div></div>
+    <div class="card"><div class="label">Papers Found</div><div class="value" id="c-count">—</div></div>
+    <div class="card"><div class="label">Processed</div><div class="value" id="c-processed">—</div></div>
+  </div>
+
+  <div class="pipeline">
+    <div class="stage" id="s-search"><div class="stage-name">Search</div><span class="badge pending" id="b-search">pending</span></div>
+    <div class="stage" id="s-summary"><div class="stage-name">Summary</div><span class="badge pending" id="b-summary">pending</span></div>
+    <div class="stage" id="s-category"><div class="stage-name">Category</div><span class="badge pending" id="b-category">pending</span></div>
+    <div class="stage" id="s-validation"><div class="stage-name">Validation</div><span class="badge pending" id="b-validation">pending</span></div>
+  </div>
+
+  <section id="error-section" style="display:none">
+    <h2>Errors</h2>
+    <div class="error-log" id="error-log"></div>
+  </section>
+
+  <section id="results-section" style="display:none">
+    <h2>Results</h2>
+    <div id="results-body"></div>
+  </section>
+
+  <div id="no-data">Waiting for pipeline data...</div>
+</main>
+
+<script>
+const STAGES = ["search","summary","category","validation"];
+let polling = true;
+
+async function poll() {
+  try {
+    const r = await fetch("pipeline_state.json?_=" + Date.now());
+    if (!r.ok) return;
+    const state = await r.json();
+    render(state);
+    if (state.stage === "complete" || state.stage_status === "failed") {
+      polling = false;
+      if (state.stage === "complete") loadResults();
+    }
+  } catch(e) {}
+}
+
+function render(s) {
+  document.getElementById("no-data").style.display = "none";
+  document.getElementById("hdr-keyword").textContent = s.keyword || "";
+  document.getElementById("c-stage").textContent = s.stage || "—";
+  document.getElementById("c-count").textContent = s.paper_count ?? "—";
+  document.getElementById("c-processed").textContent = s.papers_processed ?? "—";
+
+  const dot = document.getElementById("hdr-dot");
+  dot.className = "status-dot " + (s.stage_status === "running" ? "running" : s.stage === "complete" ? "done" : s.stage_status === "failed" ? "failed" : "");
+
+  const statusEl = document.getElementById("c-status");
+  statusEl.innerHTML = `<span class="badge ${s.stage_status}">${s.stage_status}</span>`;
+
+  STAGES.forEach(name => {
+    const el = document.getElementById("s-" + name);
+    const badge = document.getElementById("b-" + name);
+    el.className = "stage";
+    let bClass = "pending", bText = "pending";
+    const attempt = (s.attempt || {})[name] || 0;
+
+    if (s.stage === name) {
+      el.classList.add(s.stage_status === "failed" ? "failed-stage" : "active");
+      bClass = s.stage_status; bText = s.stage_status;
+    } else if (s.stage === "complete" || STAGES.indexOf(s.stage) > STAGES.indexOf(name)) {
+      el.classList.add("done-stage");
+      bClass = "done"; bText = "done";
+    }
+    badge.className = "badge " + bClass;
+    badge.textContent = bText + (attempt > 1 ? ` (×${attempt})` : "");
+  });
+
+  const errors = s.errors || [];
+  if (errors.length) {
+    document.getElementById("error-section").style.display = "";
+    document.getElementById("error-log").textContent = errors.join("\n");
+  }
+}
+
+async function loadResults() {
+  try {
+    const r = await fetch("final_results.json?_=" + Date.now());
+    if (!r.ok) return;
+    const papers = await r.json();
+    renderTable(papers);
+  } catch(e) {}
+}
+
+function renderTable(papers) {
+  if (!papers || !papers.length) return;
+  document.getElementById("results-section").style.display = "";
+
+  const byCat = {};
+  papers.forEach(p => {
+    const cats = p.categories && p.categories.length ? p.categories : ["Uncategorized"];
+    cats.forEach(c => {
+      if (!byCat[c]) byCat[c] = [];
+      byCat[c].push(p);
+    });
+  });
+
+  let html = "";
+  Object.keys(byCat).sort().forEach(cat => {
+    html += `<h3 style="font-size:14px;margin:16px 0 8px;color:#1d4ed8">${esc(cat)} <span style="font-size:12px;color:#6e6e73">(${byCat[cat].length})</span></h3>`;
+    html += `<table><thead><tr><th>#</th><th>Title</th><th>Year</th><th>Venue</th><th>Summary & APA</th></tr></thead><tbody>`;
+    byCat[cat].forEach((p, i) => {
+      const cats = (p.categories || []).map(c => `<span class="cat-badge">${esc(c)}</span>`).join("");
+      html += `<tr>
+        <td style="color:#6e6e73">${i+1}</td>
+        <td><a href="${esc(p.url||p.doi?'https://doi.org/'+p.doi:'#')}" target="_blank" style="color:#1d4ed8;text-decoration:none">${esc(p.title)}</a><br>${cats}</td>
+        <td>${p.year||"—"}</td>
+        <td style="font-size:12px;color:#6e6e73">${esc(p.venue||"—")}</td>
+        <td><div class="summary-text">${esc(p.summary||"").replace(/\n/g,"<br>")}</div><div class="apa">${esc(p.apa_ref||"")}</div></td>
+      </tr>`;
+    });
+    html += `</tbody></table>`;
+  });
+  document.getElementById("results-body").innerHTML = html;
+}
+
+function esc(s) {
+  return String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+
+poll();
+setInterval(() => { if (polling) poll(); }, 2000);
+</script>
+</body>
+</html>
